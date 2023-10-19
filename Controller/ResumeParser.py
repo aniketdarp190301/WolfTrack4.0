@@ -25,6 +25,8 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 import pytesseract
+import fitz
+import os
 
 
 # def read_pdf_resume(pdf_doc):
@@ -57,9 +59,12 @@ def read_pdf_resume(file):
 
     # creating a pdf reader object
     pdfReader = PyPDF2.PdfFileReader(pdfFileObj)
+    # pdfReader = PyPDF2.PdfReader(pdfFileObj)
 
     # creating a page object
     pageObj = pdfReader.getPage(0)
+    # pageObj = pdfReader.reader.pages[0]
+
 
     # extracting text from page
     text = pageObj.extractText()
@@ -99,25 +104,42 @@ def clean_job_decsription(jd):
     return (clean_jd)
 
 
-def create_word_cloud(jd):
+def create_word_cloud(jd, output_image_path):
+    # corpus = jd
+    # fdist = FreqDist(corpus)
+    # # print(fdist.most_common(100))
+    # words = ' '.join(corpus)
+    # words = words.split()
+
+    # # create a empty dictionary
+    # data = dict()
+    # #  Get frequency for each words where word is the key and the count is the value
+    # for word in (words):
+    #     word = word.lower()
+    #     data[word] = data.get(word, 0) + 1
+
+    #     # Sort the dictionary in reverse order to print first the most used terms
+    # dict(sorted(data.items(), key=operator.itemgetter(1), reverse=True))
+    # word_cloud = WordCloud(width=800, height=800,
+    #                        background_color='white', max_words=500)
+    # word_cloud.generate_from_frequencies(data)
     corpus = jd
     fdist = FreqDist(corpus)
-    # print(fdist.most_common(100))
     words = ' '.join(corpus)
     words = words.split()
 
-    # create a empty dictionary
     data = dict()
-    #  Get frequency for each words where word is the key and the count is the value
-    for word in (words):
+    for word in words:
         word = word.lower()
         data[word] = data.get(word, 0) + 1
 
-        # Sort the dictionary in reverse order to print first the most used terms
-    dict(sorted(data.items(), key=operator.itemgetter(1), reverse=True))
-    word_cloud = WordCloud(width=800, height=800,
-                           background_color='white', max_words=500)
-    word_cloud.generate_from_frequencies(data)
+    sorted_data = dict(sorted(data.items(), key=operator.itemgetter(1), reverse=True))
+
+    word_cloud = WordCloud(width=800, height=800, background_color='white', max_words=500)
+    word_cloud.generate_from_frequencies(sorted_data)
+
+    # Save the word cloud image
+    word_cloud.to_file(output_image_path)
 
 
 def get_resume_score(text):
@@ -133,6 +155,24 @@ def get_resume_score(text):
     print("Your resume matches about " + str(matchPercentage+50) + "% of the job description.")
     return str(matchPercentage+50)
 
+def highlight_similar_words(pdf_file, job_description, output_file):
+    doc = fitz.open(pdf_file)
+    page = doc[0]
+
+    pdf_text = page.get_text()
+
+    clean_pdf_text = clean_job_decsription(pdf_text)
+    clean_jd = clean_job_decsription(job_description)
+
+    for word in clean_pdf_text:
+        if word in clean_jd:
+            word_instances = page.searchFor(word)
+            for inst in word_instances:
+                page.add_rect(inst, fill=(1, 1, 0))
+
+    doc.save(output_file)
+    doc.close()
+
 
 def resume_analyzer(jobtext, file):
     if file.endswith(".pdf"):
@@ -144,10 +184,14 @@ def resume_analyzer(jobtext, file):
         resume = read_word_resume(file)
     job_description = jobtext
     ## Get a Keywords Cloud
+    output_wordcloud_image = os.getcwd()+ '/static/images/wordcloud.png'
     clean_jd = clean_job_decsription(job_description)
-    create_word_cloud(clean_jd)
+    create_word_cloud(clean_jd, output_wordcloud_image)
     text = [resume, job_description]
+
+    # Get Highlighted Pdf
+    output_highlighted_pdf = os.getcwd()+ '/static/files/highlighted_resume.pdf'
+    highlight_similar_words(resume, clean_jd, output_highlighted_pdf)
 
     ## Get a Match score
     return get_resume_score(text)
-
